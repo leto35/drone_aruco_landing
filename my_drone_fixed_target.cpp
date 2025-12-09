@@ -164,13 +164,13 @@ public:
         Action::Result climb_result = action_->goto_location(
             telemetry_->position().latitude_deg,
             telemetry_->position().longitude_deg,
-            8.0f,
+            TARGET_ALTITUDE,
             0.0f
         );
 
         if (climb_result == Action::Result::Success) {
-            std::cout << "Ascending to 8m target altitude..." << std::endl;
-            while (telemetry_->position().relative_altitude_m < 7.0f) {
+            std::cout << "Ascending to " << TARGET_ALTITUDE << "m target altitude..." << std::endl;
+            while (telemetry_->position().relative_altitude_m < (TARGET_ALTITUDE - 1.0f)) {
                 std::cout << "Current height: " << telemetry_->position().relative_altitude_m << "m" << std::endl;
                 std::this_thread::sleep_for(std::chrono::seconds(1));
             }
@@ -241,7 +241,8 @@ public:
             
             auto start_time = std::chrono::steady_clock::now();
             // Calculate time to traverse line_length at search_velocity
-            auto search_duration = std::chrono::milliseconds(static_cast<int>((line_length / search_velocity) * 1000));
+            auto search_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::duration<float>(line_length / search_velocity));
             
             while (std::chrono::steady_clock::now() - start_time < search_duration) {
                 // Check for marker every 200ms
@@ -274,7 +275,8 @@ public:
             if (line < num_lines - 1) {
                 auto lateral_start = std::chrono::steady_clock::now();
                 // Calculate time to move lateral_spacing meters
-                auto lateral_duration = std::chrono::milliseconds(static_cast<int>((lateral_spacing / search_velocity) * 1000));
+                auto lateral_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::duration<float>(lateral_spacing / search_velocity));
                 
                 while (std::chrono::steady_clock::now() - lateral_start < lateral_duration) {
                     Offboard::VelocityNedYaw lateral_cmd{0, search_velocity, 0, 0};
@@ -345,6 +347,8 @@ public:
     }
 
 private:
+    static constexpr float TARGET_ALTITUDE = 8.0f; // Target takeoff altitude in meters
+    
     std::shared_ptr<System> drone_system_;
     std::unique_ptr<Action> action_;
     std::unique_ptr<Telemetry> telemetry_;
