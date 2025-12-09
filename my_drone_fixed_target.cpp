@@ -134,6 +134,10 @@ public:
         telemetry_ = std::make_unique<Telemetry>(sys);
         offboard_ = std::make_unique<Offboard>(sys);
         gimbal_ = std::make_unique<Gimbal>(sys);
+        
+        // Initialize simple proportional controllers with kp = 0.0008
+        lateral_controller_ = std::make_unique<SimpleProportionalController>(0.0008f);
+        longitudinal_controller_ = std::make_unique<SimpleProportionalController>(0.0008f);
     }
 
     bool execute_takeoff() {
@@ -227,22 +231,17 @@ public:
         const int num_lines = 5;
         const float line_length = 20.0f;
         const float lateral_spacing = 4.0f;
-        
-        float initial_lat = telemetry_->position().latitude_deg;
-        float initial_lon = telemetry_->position().longitude_deg;
-        float altitude = telemetry_->position().relative_altitude_m;
+        const float search_velocity = 2.0f; // m/s
         
         for (int line = 0; line < num_lines; line++) {
             std::cout << "Search line " << (line + 1) << "/" << num_lines << std::endl;
             
-            // Calculate offset for current line
-            float lateral_offset = line * lateral_spacing;
-            
-            // Move forward along the line
+            // Move forward along the line (alternating direction)
             float forward_direction = (line % 2 == 0) ? 1.0f : -1.0f;
             
             auto start_time = std::chrono::steady_clock::now();
-            auto search_duration = std::chrono::seconds(10); // Time to traverse line_length at reasonable speed
+            // Calculate time to traverse line_length at search_velocity
+            auto search_duration = std::chrono::milliseconds(static_cast<int>((line_length / search_velocity) * 1000));
             
             while (std::chrono::steady_clock::now() - start_time < search_duration) {
                 // Check for marker every 200ms
@@ -260,7 +259,7 @@ public:
                 }
                 
                 // Continue forward movement
-                Offboard::VelocityNedYaw search_cmd{forward_direction * 2.0f, 0, 0, 0};
+                Offboard::VelocityNedYaw search_cmd{forward_direction * search_velocity, 0, 0, 0};
                 offboard_->set_velocity_ned(search_cmd);
                 
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -274,10 +273,11 @@ public:
             // Move laterally for next line (if not last line)
             if (line < num_lines - 1) {
                 auto lateral_start = std::chrono::steady_clock::now();
-                auto lateral_duration = std::chrono::seconds(2); // Time to move lateral_spacing meters
+                // Calculate time to move lateral_spacing meters
+                auto lateral_duration = std::chrono::milliseconds(static_cast<int>((lateral_spacing / search_velocity) * 1000));
                 
                 while (std::chrono::steady_clock::now() - lateral_start < lateral_duration) {
-                    Offboard::VelocityNedYaw lateral_cmd{0, 2.0f, 0, 0};
+                    Offboard::VelocityNedYaw lateral_cmd{0, search_velocity, 0, 0};
                     offboard_->set_velocity_ned(lateral_cmd);
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
@@ -301,9 +301,9 @@ public:
             float error_x = target_center.x - image_center.x;
             float error_y = target_center.y - image_center.y;
             
-            float kp = 0.0008f;
-            vel_right = std::clamp(kp * error_x, -0.4f, 0.4f);
-            vel_forward = std::clamp(-kp * error_y, -0.4f, 0.4f);
+            // Use SimpleProportionalController for both axes
+            vel_right = std::clamp(lateral_controller_->calculate(error_x), -0.4f, 0.4f);
+            vel_forward = std::clamp(-longitudinal_controller_->calculate(error_y), -0.4f, 0.4f);
             
             float total_error = std::sqrt(error_x * error_x + error_y * error_y);
             
@@ -350,6 +350,9 @@ private:
     std::unique_ptr<Telemetry> telemetry_;
     std::unique_ptr<Offboard> offboard_;
     std::unique_ptr<Gimbal> gimbal_;
+
+    std::unique_ptr<SimpleProportionalController> lateral_controller_;
+    std::unique_ptr<SimpleProportionalController> longitudinal_controller_;
 
     bool landing_complete_ = false;
 };
