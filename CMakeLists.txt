@@ -40,3 +40,8 @@ endif()
 add_executable(my_drone_pid my_drone_pid.cpp)
 target_link_libraries(my_drone_pid MAVSDK::mavsdk ${OpenCV_LIBS} ${GZ_LIBS})
 target_include_directories(my_drone_pid PRIVATE /usr/local/include/mavsdk ${OpenCV_INCLUDE_DIRS})
+
+# Programme avec contrôleur proportionnel simple pour cible fixe (Phase 1)
+add_executable(my_drone_fixed_target my_drone_fixed_target.cpp)
+target_link_libraries(my_drone_fixed_target MAVSDK::mavsdk ${OpenCV_LIBS} ${GZ_LIBS})
+target_include_directories(my_drone_fixed_target PRIVATE /usr/local/include/mavsdk ${OpenCV_INCLUDE_DIRS})
